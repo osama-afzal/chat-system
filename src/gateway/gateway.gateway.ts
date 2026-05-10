@@ -1,25 +1,60 @@
+import { JwtService } from '@nestjs/jwt';
 import {
   WebSocketGateway,
   WebSocketServer,
   OnGatewayConnection,
   OnGatewayDisconnect,
-  SubscribeMessage
+  SubscribeMessage,
 } from '@nestjs/websockets';
 
 import { Server, Socket } from 'socket.io';
+import { GatewayService } from './gateway.service';
 
 @WebSocketGateway({
   cors: {
     origin: '*',
   },
 })
-export class GatewayGateway implements OnGatewayConnection, OnGatewayDisconnect
+export class GatewayGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
 {
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly gatewayService: GatewayService
+  ) {}
+
   @WebSocketServer()
   server: Server;
 
   handleConnection(client: Socket) {
-    console.log(`Client connected: ${client.id}`);
+    console.log('Incoming socket connection');
+
+    try {
+      const token = client.handshake.auth.token;
+
+      console.log('Token received');
+
+      if (!token) {
+        console.log('No token provided');
+        client.disconnect();
+        return;
+      }
+
+      const payload = this.jwtService.verify(token);
+
+      console.log('JWT payload:', payload);
+
+      client.data.user = {
+        userId: payload.sub,
+        username: payload.username,
+      };
+
+      console.log('Authenticated user:', client.data.user);
+    } catch (error) {
+      console.log('Socket auth failed:', error);
+
+      client.disconnect();
+    }
   }
 
   handleDisconnect(client: Socket) {
@@ -27,12 +62,12 @@ export class GatewayGateway implements OnGatewayConnection, OnGatewayDisconnect
   }
 
   @SubscribeMessage('message.send')
-  handleMessage(client: Socket, payload: any) {
-    console.log('message.send received: ', payload);
+  async handleMessage(client: Socket, payload: any) {
+    const message = await this.gatewayService.handleMessage(
+      client,
+      payload
+    );
 
-    client.emit('message.echo', {
-      ...payload,
-      receivedAt: new Date().toISOString()
-    });
+    client.emit('message.new', message);
   }
 }

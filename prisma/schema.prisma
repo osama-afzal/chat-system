@@ -44,6 +44,7 @@ model Message {
   userId         String
   content        String
   createdAt      DateTime @default(now())
+  sequenceNumber BigInt
 
   user           User @relation(fields: [userId], references: [id])
   room           Room @relation(fields: [roomId], references: [id])
