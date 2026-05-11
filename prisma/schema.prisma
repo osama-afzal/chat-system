@@ -36,6 +36,7 @@ model RoomMember {
 
   @@index([roomId])
   @@index([userId])
+  @@unique([roomId, userId])
 }
 
 model Message {

@@ -9,6 +9,7 @@ import {
 
 import { Server, Socket } from 'socket.io';
 import { GatewayService } from './gateway.service';
+import { JoinRoomDto } from './dto/join-room.dto';
 
 @WebSocketGateway({
   cors: {
@@ -68,6 +69,20 @@ export class GatewayGateway
       payload
     );
 
-    client.emit('message.new', message);
+    this.server.to(payload.roomId).emit(
+      'message.new',
+      message,
+    );
+  }
+
+  @SubscribeMessage('room.join')
+  async handleJoinRoom(client: Socket, payload: JoinRoomDto) {
+    await this.gatewayService.joinRoom(client, payload);
+
+    client.join(payload.roomId);
+
+    client.emit('room.joined', {
+      roomId: payload.roomId
+    });
   }
 }
