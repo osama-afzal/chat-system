@@ -59,6 +59,14 @@ export class GatewayGateway
   }
 
   handleDisconnect(client: Socket) {
+    const user = client.data.user;
+
+    if (!user) return;
+
+    this.server.emit('room.user_left', {
+      username: user.username
+    });
+
     console.log(`Client disconnected: ${client.id}`);
   }
 
@@ -77,9 +85,25 @@ export class GatewayGateway
 
   @SubscribeMessage('room.join')
   async handleJoinRoom(client: Socket, payload: JoinRoomDto) {
+    const user = client.data.user;
+    
+    const room = await this.gatewayService.findRoom(payload.roomId);
+
+    if (!room) {
+      client.emit('error', {
+        message: 'Room does not exist',
+      });
+      return;
+    }
+
     await this.gatewayService.joinRoom(client, payload);
 
     client.join(payload.roomId);
+
+    this.server.to(payload.roomId).emit('room.user_joined', {
+      roomId: payload.roomId,
+      username: user.username
+    });
 
     client.emit('room.joined', {
       roomId: payload.roomId
