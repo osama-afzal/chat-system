@@ -100,13 +100,19 @@ export class GatewayGateway
 
     client.join(payload.roomId);
 
-    this.server.to(payload.roomId).emit('room.user_joined', {
-      roomId: payload.roomId,
-      username: user.username
-    });
+    const history = await this.gatewayService.getRecentMessages(
+      payload.roomId,
+    );
+
+    client.emit('room.history', history);
 
     client.emit('room.joined', {
       roomId: payload.roomId
+    });
+
+    client.to(payload.roomId).emit('room.user_joined', {
+      roomId: payload.roomId,
+      username: user.username,
     });
   }
 }

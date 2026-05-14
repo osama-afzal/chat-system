@@ -12,14 +12,29 @@ rl.prompt(true);
 const socket = io('http://localhost:3000', {
   auth: {
     token:
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0MmExYzc0ZC0yYmM3LTQ0OWItOGFmNC01YmZjMmJmM2JmNGUiLCJ1c2VybmFtZSI6ImVudnlCbHVlIiwiaWF0IjoxNzc4NjMzMDA4LCJleHAiOjE3Nzg3MTk0MDh9.u_-u-Yu0ELyyE0Q0WT9BssII08blhpCsG0mr5UbP64s',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0MmExYzc0ZC0yYmM3LTQ0OWItOGFmNC01YmZjMmJmM2JmNGUiLCJ1c2VybmFtZSI6ImVudnlCbHVlIiwiaWF0IjoxNzc4NzE3NjkyLCJleHAiOjE3Nzg4MDQwOTJ9.Q7_f_usFd_XpB0E3c3HmtBebiph6QtTCBQXbJQuk6IU',
   },
 });
 
 let currentRoomId = '';
+let hasLoadedHistory = false;
 
 socket.on('connect', () => {
   print('Connected');
+});
+
+socket.io.on('reconnect', () => {
+  print('Reconnected');
+
+  if (currentRoomId) {
+    socket.emit('room.join', {
+      roomId: currentRoomId,
+    });
+  }
+});
+
+socket.on('disconnect', (reason) => {
+  print(`Disconnected: ${reason}`);
 });
 
 socket.on('room.joined', (data) => {
@@ -34,11 +49,29 @@ socket.on('message.new', (message) => {
 });
 
 socket.on('room.user_joined', (data) => {
-  console.log(`${data.username} joined ${data.roomId}`);
+  print(
+    `${data.username} joined ${data.roomId}`
+  );
 });
 
 socket.on('room.user_left', (data) => {
-  console.log(`${data.username} left`);
+  print(
+    `${data.username} left`
+  );
+});
+
+socket.on('room.history', (messages) => {
+  if (hasLoadedHistory) {
+    return;
+  }
+
+  hasLoadedHistory = true;
+
+  for (const message of messages) {
+    print(
+      `[${message.username}] ${message.content}`
+    );
+  }
 });
 
 socket.on('error', (err) => {
@@ -67,6 +100,8 @@ function handleCommand(input: string) {
         print('Usage: /join <roomId>');
         return;
       }
+
+      hasLoadedHistory = false;
 
       socket.emit('room.join', {
         roomId,

@@ -7,100 +7,122 @@ import { WsException } from '@nestjs/websockets';
 
 @Injectable()
 export class GatewayService {
-    constructor(
-        private readonly prismaService: PrismaService
-    ) {}
+  constructor(private readonly prismaService: PrismaService) {}
 
-    async handleMessage(client: Socket, payload: SendMessageDto) {
-        const user = client.data.user;
+  async handleMessage(client: Socket, payload: SendMessageDto) {
+    const user = client.data.user;
 
-        const room = await this.prismaService.room.findUnique({
-            where: { id: payload.roomId },
-        });
+    const room = await this.prismaService.room.findUnique({
+      where: { id: payload.roomId },
+    });
 
-        if (!room) {
-            throw new WsException('Room does not exist');
-        }
-
-        const latestMessage = await this.prismaService.message.findFirst({
-            where: {
-                roomId: payload.roomId
-            },
-            orderBy: {
-                sequenceNumber: 'desc'
-            }
-        });
-
-        const nextSequenceNumber = latestMessage
-            ? latestMessage.sequenceNumber + BigInt(1)
-            : BigInt(1);
-
-        const membership = await this.prismaService.roomMember.findUnique({
-            where: {
-                roomId_userId: {
-                    roomId: payload.roomId,
-                    userId: user.userId
-                },
-            },
-        });
-
-        if (!membership) {
-            throw new Error('Unauthorized room access');
-        }
-
-        const message = await this.prismaService.message.create({
-            data: {
-                roomId: payload.roomId,
-                userId: user.userId,
-                content: payload.content,
-                sequenceNumber: nextSequenceNumber
-            },
-            include: {
-                user: true
-            }
-        });
-
-        return {
-            id: message.id,
-            roomId: message.roomId,
-            username: message.user.username,
-            content: message.content,
-            sequenceNumber: message.sequenceNumber.toString(),
-            createdAt: message.createdAt,
-        };
+    if (!room) {
+      throw new WsException('Room does not exist');
     }
 
-    async joinRoom(client: Socket, payload: JoinRoomDto) {
-        const user = client.data.user;
+    const latestMessage = await this.prismaService.message.findFirst({
+      where: {
+        roomId: payload.roomId,
+      },
+      orderBy: {
+        sequenceNumber: 'desc',
+      },
+    });
 
-        const room = await this.prismaService.room.findUnique({
-            where: {
-                id: payload.roomId
-            },
-        });
+    const nextSequenceNumber = latestMessage
+      ? latestMessage.sequenceNumber + BigInt(1)
+      : BigInt(1);
 
-        if (!room) {
-            throw new Error('Room not found');
-        }
+    const membership = await this.prismaService.roomMember.findUnique({
+      where: {
+        roomId_userId: {
+          roomId: payload.roomId,
+          userId: user.userId,
+        },
+      },
+    });
 
-        await this.prismaService.roomMember.upsert({
-            where: {
-                roomId_userId: {
-                    roomId: payload.roomId,
-                    userId: user.userId
-                },
-            },
-            update: {},
-            create: {
-                roomId: payload.roomId,
-                userId: user.userId
-            }
-        });
+    if (!membership) {
+      throw new Error('Unauthorized room access');
     }
 
-    async findRoom(roomId: string) {
-        return this.prismaService.room.findUnique({
-            where: { id: roomId },
-        });
+    const message = await this.prismaService.message.create({
+      data: {
+        roomId: payload.roomId,
+        userId: user.userId,
+        content: payload.content,
+        sequenceNumber: nextSequenceNumber,
+      },
+      include: {
+        user: true,
+      },
+    });
+
+    return {
+      id: message.id,
+      roomId: message.roomId,
+      username: message.user.username,
+      content: message.content,
+      sequenceNumber: message.sequenceNumber.toString(),
+      createdAt: message.createdAt,
+    };
+  }
+
+  async joinRoom(client: Socket, payload: JoinRoomDto) {
+    const user = client.data.user;
+
+    const room = await this.prismaService.room.findUnique({
+      where: {
+        id: payload.roomId,
+      },
+    });
+
+    if (!room) {
+      throw new Error('Room not found');
     }
+
+    await this.prismaService.roomMember.upsert({
+      where: {
+        roomId_userId: {
+          roomId: payload.roomId,
+          userId: user.userId,
+        },
+      },
+      update: {},
+      create: {
+        roomId: payload.roomId,
+        userId: user.userId,
+      },
+    });
+  }
+
+  async findRoom(roomId: string) {
+    return this.prismaService.room.findUnique({
+      where: { id: roomId },
+    });
+  }
+
+  async getRecentMessages(roomId: string) {
+    const messages = await this.prismaService.message.findMany({
+      where: {
+        roomId,
+      },
+      orderBy: {
+        sequenceNumber: 'desc',
+      },
+      take: 20,
+      include: {
+        user: true,
+      },
+    });
+
+    return messages.reverse().map((message) => ({
+      id: message.id,
+      roomId: message.roomId,
+      username: message.user.username,
+      content: message.content,
+      sequenceNumber: message.sequenceNumber.toString(),
+      createdAt: message.createdAt,
+    }));
+  }
 }
