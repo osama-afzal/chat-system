@@ -4,6 +4,7 @@ import { SendMessageDto } from './dto/send-message.dto';
 import { Socket } from 'socket.io';
 import { JoinRoomDto } from './dto/join-room.dto';
 import { WsException } from '@nestjs/websockets';
+import { LoadHistoryDto } from './dto/load-history.dto';
 
 @Injectable()
 export class GatewayService {
@@ -123,6 +124,37 @@ export class GatewayService {
       content: message.content,
       sequenceNumber: message.sequenceNumber.toString(),
       createdAt: message.createdAt,
+    }));
+  }
+
+  async loadHistory(payload: LoadHistoryDto) {
+    const limit = payload.limit ?? 20;
+
+    const messages = await this.prismaService.message.findMany({
+      where: {
+        roomId: payload.roomId,
+        ...(payload.beforeSequenceNumber && {
+          sequenceNumber: {
+            lt: BigInt(payload.beforeSequenceNumber)
+          },
+        }),
+      },
+      orderBy: {
+        sequenceNumber: 'desc'
+      },
+      take: limit,
+      include: {
+        user: true
+      }
+    });
+
+    return messages.reverse().map((message) => ({
+      id: message.id,
+      roomId: message.roomId,
+      username: message.user.username,
+      content: message.content,
+      sequenceNumber: message.sequenceNumber.toString(),
+      createdAt: message.createdAt
     }));
   }
 }

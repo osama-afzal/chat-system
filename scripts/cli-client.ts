@@ -12,12 +12,13 @@ rl.prompt(true);
 const socket = io('http://localhost:3000', {
   auth: {
     token:
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0MmExYzc0ZC0yYmM3LTQ0OWItOGFmNC01YmZjMmJmM2JmNGUiLCJ1c2VybmFtZSI6ImVudnlCbHVlIiwiaWF0IjoxNzc4NzE3NjkyLCJleHAiOjE3Nzg4MDQwOTJ9.Q7_f_usFd_XpB0E3c3HmtBebiph6QtTCBQXbJQuk6IU',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0MmExYzc0ZC0yYmM3LTQ0OWItOGFmNC01YmZjMmJmM2JmNGUiLCJ1c2VybmFtZSI6ImVudnlCbHVlIiwiaWF0IjoxNzc5MTMwODQ1LCJleHAiOjE3NzkyMTcyNDV9.tyxg64y6QW5sDxEA0NwKEO4YYC9hZppnI0gOrP8gUDo',
   },
 });
 
 let currentRoomId = '';
 let hasLoadedHistory = false;
+let oldestSequenceNumber: string | null = null;
 
 socket.on('connect', () => {
   print('Connected');
@@ -72,6 +73,25 @@ socket.on('room.history', (messages) => {
       `[${message.username}] ${message.content}`
     );
   }
+
+  if (messages.length > 0) {
+    oldestSequenceNumber = messages[0].sequenceNumber;
+  }
+});
+
+socket.on('messages.history.loaded', (messages) => {
+  if (messages.length === 0) {
+    print('No older messages');
+    return;
+  }
+
+  for (const message of messages) {
+    print(
+      `[${message.roomId}] ${message.username}: ${message.content}`,
+    );
+  }
+
+  oldestSequenceNumber = messages[0].sequenceNumber;
 });
 
 socket.on('error', (err) => {
@@ -118,6 +138,21 @@ function handleCommand(input: string) {
                 /help            Show commands
                 /exit            Exit client
             `);
+
+      break;
+    }
+
+    case '/history': {
+      if (!currentRoomId) {
+        print('Join a room first');
+        return;
+      }
+
+      socket.emit('messages.history.load', {
+        roomId: currentRoomId,
+        beforeSequenceNumber: oldestSequenceNumber,
+        limit: 20,
+      });
 
       break;
     }

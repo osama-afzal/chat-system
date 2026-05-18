@@ -6,6 +6,7 @@ import {
   OnGatewayDisconnect,
   SubscribeMessage,
 } from '@nestjs/websockets';
+import { LoadHistoryDto } from './dto/load-history.dto';
 
 import { Server, Socket } from 'socket.io';
 import { GatewayService } from './gateway.service';
@@ -114,5 +115,19 @@ export class GatewayGateway
       roomId: payload.roomId,
       username: user.username,
     });
+  }
+
+  @SubscribeMessage('messages.history.load')
+  async handleLoadHistory(
+    client: Socket,
+    payload: LoadHistoryDto
+  ) {
+    console.log('Loading history:', payload);
+
+    const messages = await this.gatewayService.loadHistory(payload);
+
+    console.log('Messages found:', messages.length);
+
+    client.emit('messages.history.loaded', messages);
   }
 }
